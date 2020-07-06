@@ -5,6 +5,7 @@ import java.nio.file.Paths
 
 import scala.jdk.CollectionConverters._
 import scala.util.chaining._
+import scala.io.StdIn.readLine
 
 /**
   * Можете реализовать свою логику.
@@ -36,10 +37,73 @@ object FileManager extends App {
 
   case class ChangePathError(error: String)
 
-  def getFiles(path: String): List[String]                                       = ???
-  def getDirectories(path: String): List[String]                                 = ???
-  def changePath(current: String, path: String): Either[ChangePathError, String] = ???
-  def parseCommand(input: String): Command                                       = ???
-  def handleCommand(command: Command, currentPath: String): String               = ???
-  def main(basePath: String): Unit                                               = ???
+  def getAll(path: String): List[String] = {
+    Files
+      .list(Paths.get(path))
+      .iterator()
+      .asScala
+      .map(x => x.toFile.getName)
+      .map(x => s"$path/$x")
+      .toList
+  }
+
+  def getFiles(path: String): List[String] = {
+    Files
+      .list(Paths.get(path))
+      .iterator()
+      .asScala
+      .filter(x => x.toFile.isFile)
+      .map(x => x.toFile.getName)
+      .map(x => s"$path/$x")
+      .toList
+  }
+  def getDirectories(path: String): List[String] = {
+    Files
+      .list(Paths.get(path))
+      .iterator()
+      .asScala
+      .filter(x => x.toFile.isDirectory)
+      .map(x => x.toFile.getName)
+      .map(x => s"$path/$x")
+      .toList
+  }
+  def changePath(current: String, path: String): Either[ChangePathError, String] = {
+    val res = if(path.equals("..")) current.split('/').init.mkString("/") else s"$current/$path"
+    if(Files.isDirectory(Paths.get(res))) Right(res)
+    else Left(ChangePathError("No such directory"))
+  }
+  def parseCommand(input: String): Command = input match {
+    case string: String if(string == "ll") => ListAllContentCommand()
+    case string: String if(string == "ls") => ListFilesCommand()
+    case string: String if(string == "dir") => ListDirectoryCommand()
+    case string: String if(string.startsWith("cd ")) => ChangeDirectoryCommand(string.split(" ")(1))
+    case _ => PrintErrorCommand("No such command")
+  }
+  def handleCommand(command: Command, currentPath: String): String = command match {
+    case PrintErrorCommand(error) => error
+    case ListAllContentCommand() => getAll(currentPath).mkString("\n")
+    case ListDirectoryCommand() => getDirectories(currentPath).mkString("\n")
+    case ListFilesCommand() => getFiles(currentPath).mkString("\n")
+    case ChangeDirectoryCommand(destination) => changePath(currentPath, destination) match {
+      case Left(value) => value.error
+      case Right(value) => value
+    }
+  }
+  def main(basePath: String): Unit = {
+    def loop(path: String): Unit = {
+      print(path+">")
+      readLine().pipe(parseCommand).tap(x => {
+        if(x.isSubstitutive) loop(handleCommand(x, path))
+        else {
+          println(handleCommand(x, path))
+          loop(path)
+        }
+      })
+    }
+
+    loop(basePath)
+  }
+
+  main("C:/")
+
 }
